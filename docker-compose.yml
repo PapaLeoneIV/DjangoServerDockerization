@@ -1,0 +1,107 @@
+services:
+  db:
+    # From which image start the container
+    image: postgres
+    # Mount ./data/db inside the /varlib/postgresqldata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # Set the eviroment variables for access to database
+    user: postgres
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    #Expose the port 5432 of this container to all conainers inside the same network
+    expose:
+      - "5432"
+  web:
+    build: ./services/django
+    volumes:
+      - .:/app
+      - static-data:/vol/static
+      - media-data:/vol/media
+    environment:
+      - POSTGRES_NAME=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - '8000:8000'
+    depends_on:
+      - db
+      - rabbitmq
+  
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: "rabbitmq"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/
+      - ~/.docker-conf/rabbitmq/log/:/var/log/rabbitmq
+
+  celery:
+    restart: always
+    build: ./services/django
+    command: celery -A core worker -l info
+    volumes:
+      - .:/app
+    environment:
+      - DB_HOST=db
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASS=postgres
+    depends_on:
+      - db
+      - web 
+      - rabbitmq
+  celery-beat:
+    restart: always
+    build: ./services/django
+    command: celery -A core beat -l info
+    volumes:
+      - .:/app
+    environment:
+      - DB_HOST=db
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASS=postgres
+    depends_on:
+      - db
+      - web 
+      - rabbitmq
+  celery-flower:
+    image: gregsi/latest-celery-flower-docker:latest
+    environment:
+      - AMQP_USERNAME=guest
+      - AMQP_PASSWORD=guest
+      - AMQP_ADMIN_USERNAME=guest
+      - AMQP_ADMIN_PASSWORD=guest
+      - AMQP_HOST=rabbitmq
+      - AMQP_PORT=5672
+      - AMQP_ADMIN_HOST=guest
+      - AMQP_ADMIN_PORT=15672
+      - FLOWER_BASIC_AUTH=guest:guest
+    ports:
+      - "5555:5555"
+    depends_on:
+      - rabbitmq
+      - db
+      - web
+  nginx:
+    image: nginx:latest
+    build:
+      context: ./services/nginx
+    restart: always
+    volumes:
+      - static-data:/vol/static
+      - media-data:/vol/media
+    ports:
+      - "80:80"
+    depends_on:
+      - web
+volumes:
+  postgres-data:
+  flower_data:
+  static-data:
+  media-data:
