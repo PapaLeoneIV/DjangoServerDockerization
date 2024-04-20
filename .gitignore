@@ -1,0 +1,11 @@
+env/
+
+celerybeat-schedule
+
+chromedriver
+
+downloaded_content.txt
+
+google-chrome-stable_current_amd64.deb
+
+./scraper/management/commands/__pycache__
